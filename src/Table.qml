@@ -2,11 +2,15 @@ import QtQuick 2.9
 import QtQuick.Controls 2.3
 ListView {
     id: r
+    signal itemChecked(int index, bool checked)
     property color headerColor: "#3498db"
     property real headerHeight: 25
     property real rowHeight: 25
-    property color alternateColor: "#FBFBFB"
-    property list<TableColumn> columns    
+    property color rowAlternateColor: "#FBFBFB"
+    property color currentColor: "#CCE8FF"
+    property color hoveredColor: "#E5F3FF"
+    property color rowColor: "white"
+    property list<TableColumn> columns
     property bool checkable: false
     onCheckableChanged: calcContentWidth()
     readonly property int checkableWidth: 26
@@ -14,6 +18,7 @@ ListView {
     focus: true
     flickableDirection: Flickable.AutoFlickIfNeeded
     headerPositioning: ListView.OverlayHeader
+    clip: true
     header: Rectangle {
         id: h
         z: 3
@@ -78,15 +83,22 @@ ListView {
             Repeater {
                 model: columns.length
                 Item {
+                    id: item
+                    property int indexContent: index
                     width: columns[index].width
                     height: r.rowHeight
                     clip: true
                     Loader {
                         id: loader
                         anchors.fill: parent
-                        //property variant model: r.model.data(rowData.rowIndex)
-                        property variant model: rowData.itemModel
-                        sourceComponent: columns[index].content                        
+                        property var model: rowData.itemModel
+                        property int index: rowData.rowIndex
+                        sourceComponent: columns[item.indexContent].content
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: checkItem()
+                        }
                     }
                 }
             }
@@ -94,42 +106,44 @@ ListView {
         background: Rectangle {
             width: rowData.implicitWidth + columns.length
             height: rowData.implicitHeight
-            color: rowData.isCurrentItem ? "#CCE8FF" :
-                                           (mouse.containsMouse ? "#E5F3FF" :
-                                                                  ((rowData.rowIndex % 2) == 0 ? "white" : r.alternateColor))
+            color: ((rowData.isCurrentItem) && (!r.checkable)) || ((r.checkable) && (rowData.checked)) ? r.currentColor :
+                                           (rowData.hovered ? r.hoveredColor :
+                                                                  ((rowData.rowIndex % 2) == 0 ? r.rowColor : r.rowAlternateColor))
         }
-        indicator: Rectangle {
-            x: 3
-            anchors.verticalCenter: parent.verticalCenter
-            visible: r.checkable
-            implicitWidth: 14
-            implicitHeight: 14
-            radius: 3
-            color: "transparent"
-            border.color: r.headerColor
+        indicator: Item {
+            width: r.checkableWidth
+            height: r.rowHeight
             Rectangle {
-                width: 8
-                height: 8
-                x: 3
-                y: 3
-                radius: 2
-                color: r.headerColor
-                visible: rowData.checked
+                anchors.centerIn: parent
+                visible: r.checkable
+                width: 14
+                height: 14
+                radius: 3
+                color: "transparent"
+                border.color: r.headerColor
+                Rectangle {
+                    width: 8
+                    height: 8
+                    x: 3
+                    y: 3
+                    radius: 2
+                    color: r.headerColor
+                    visible: rowData.checked
+                }
+            }
+            MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                onClicked: checkItem()
             }
         }
-        MouseArea {
-            id: mouse
-            anchors.fill: parent
-            hoverEnabled: true
-            onClicked: {
+        function checkItem() {
+            if (r.checkable) {
                 rowData.checked = !rowData.checked
-                r.currentIndex = rowData.rowIndex
+                r.itemChecked(rowData.rowIndex, rowData.checked)
             }
+            r.currentIndex = rowData.rowIndex
         }
-    }
-    highlight: Rectangle {
-        border.color: "#99D1FF"
-        color: "#CCE8FF"
     }
     ScrollBar.horizontal: ScrollBar {
         policy: r.width < r.contentWidth ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
@@ -154,6 +168,14 @@ ListView {
             }
         }
     }
+    Keys.onDownPressed: {
+        if (r.currentIndex < r.count - 1)
+            r.currentIndex++
+     }
+     Keys.onUpPressed: {
+         if (r.currentIndex > 0)
+             r.currentIndex --
+     }
     function calcContentWidth() {
         var totalWidth = r.checkable ? r.checkableWidth : 0
         for (var i = 0; i < columns.length; i++) {
